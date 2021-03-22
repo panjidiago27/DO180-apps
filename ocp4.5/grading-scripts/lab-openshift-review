@@ -1,0 +1,122 @@
+#!/usr/bin/bash
+#
+# Copyright 2017 Red Hat, Inc.
+#
+# NAME
+#     lab-openshift-review - DO180 Deploy Containerized App on OpenShift
+#
+# SYNOPSIS
+#     lab-openshift {start|grade|finish}
+#
+#        start   - configures the environment at the start of a lab or exercise.
+#        grade   - checks that containers and images have been created successfully.
+#        finish  - executes any administrative tasks after completion of a lab or exercise.
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script is for lab 6.11
+#
+# CHANGELOG
+#   * Wen Feb 20 2019 Eduardo Ramirez <eramirez@redhat.com>
+#   - Updated to OCP 4.0
+#   * Mon Jun 18 2018 Artur Glogowski <aglogows@redhat.com>
+#   - updated to version 3.9
+#   * Mon Apr 10 2017 Jim Rigsbee <jrigsbee@redhat.com>
+#   - original code
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin
+
+# Initialize and set some variables
+run_as_root='true'
+this='openshift-review'
+target='workstation'
+title='Lab: Deploying Containerized Applications on OpenShift'
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(start grade finish)
+
+# Additional functions for this grading script
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and grading of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_start {
+  print_header "Setting up ${target} for the ${title}"
+
+  ocp4_is_cluster_up
+
+  pad " · Ensuring the '${RHT_OCP4_DEV_USER}-ocp' project does not exist"
+  delete_project "${RHT_OCP4_DEV_USER}-ocp"
+  if [ $? -eq 0 ]; then
+    print_SUCCESS
+  else
+    print_FAIL
+  fi
+
+  print_line
+}
+
+function lab_grade {
+  print_header "Grading the student's work for the ${title}"
+
+  ocp4_login_as_developer
+
+  pad "Accessing the web application"
+  local fqdn=$(find_route_fqdn2)
+  curl -f -s --connect-timeout 1 "http://${fqdn}" | grep "Converting"
+  if [ $? == "0" ]; then
+    print_PASS
+  else
+    print_FAIL
+    print_line "   --> Unable to access: $fqdn"
+  fi
+
+}
+
+function lab_finish {
+  print_header "Completing the ${title}"
+
+  ocp4_login_as_developer
+
+  pad " · Deleting the ${RHT_OCP4_DEV_USER}-ocp project"
+
+  delete_project "${RHT_OCP4_DEV_USER}-ocp"
+  if [ $? -eq 0 ]; then
+    print_SUCCESS
+  else
+    print_FAIL
+  fi
+
+}
+
+function find_route_fqdn2 {
+  #local stmt=$(${oc} get route temps | tail -n1 | awk '{print $2}')
+  local stmt=$(${oc} get route temps -o template --template='{{.spec.host}}')
+  echo $stmt
+}
+
+
+function find_route_fqdn {
+  local stmt=$(${oc} describe route temps | grep Host)
+  IFS=':' read -ra FQDN <<< "$stmt"
+  echo "${FQDN[1]}" | tr -d [:space:]
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

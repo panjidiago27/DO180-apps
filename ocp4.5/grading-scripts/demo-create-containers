@@ -1,0 +1,87 @@
+#!/usr/bin/bash
+#
+# Copyright 2017 Red Hat, Inc.
+#
+# NAME
+#    demo-create-containers - grading/setup script for DO180
+#
+# SYNOPSIS
+#     demo-create-containers {setup|grade|solve|reset}
+#
+#        setup   - no setup is needed for this lab
+#        grade   - checks if the  docker image was pulled and it is running
+#        solve   - installs a rhel7.3 image with the name demo-container-{1,2,3,4}
+#        reset   - destroys the rhel7.3 container and remove the image from the local repository
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script is used by the Demo: Creating Containers
+#
+# CHANGELOG
+#   * Wed Jun 13 2018 Artur Glogowski <aglogows@redhat.com>
+#   - updated to version 3.9
+#   * Thu Mar 23 2017 Richard Allred <rallred@redhat.com>
+#   * Original Code
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+# Initialize and set some variables
+run_as_root='true'
+target='workstation'
+this="create-containers"
+title="Demo: Creating Containers"
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(setup reset)
+
+# Additional functions for this grading script
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and grading of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_setup {
+  print_header "Setting up ${target} for ${title}"
+  check_docker_is_running
+}
+
+
+function lab_reset {
+  print_header "Cleaning up the lab for ${title}"
+  pad "Stopping containers"
+  docker stop demo-container 2>/dev/null 1>/dev/null
+  docker stop demo-container-2 2>/dev/null 1>/dev/null
+  docker stop demo-container-3 2>/dev/null 1>/dev/null
+  docker stop demo-container-4 2>/dev/null 1>/dev/null
+  docker stop artrois-bell 2>/dev/null 1>/dev/null
+  print_SUCCESS
+
+  pad "Removing containers"
+  docker rm demo-container  2>/dev/null 1>/dev/null
+  docker rm demo-container-2 2>/dev/null 1>/dev/null
+  docker rm demo-container-3 2>/dev/null 1>/dev/null
+  docker rm demo-container-4 2>/dev/null 1>/dev/null
+  docker rm artrois-bell 2>/dev/null 1>/dev/null
+  print_SUCCESS
+  pad "Removing images"
+  docker rmi -f rhel7.3 2>/dev/null 1>/dev/null
+  print_SUCCESS
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

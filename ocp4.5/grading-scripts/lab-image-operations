@@ -1,0 +1,86 @@
+#!/usr/bin/bash
+#
+# Copyright 2019 Red Hat, Inc.
+#
+# NAME
+#     lab-image-operations - grading/setup script for DO180
+#
+# SYNOPSIS
+#     lab-image-operations {start|finish}
+#
+#        start   - configures the environment at the start of a lab or exercise.
+#        finish  - executes any administrative tasks after completion of a lab or exercise.
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script configures GE: Creating a Custom Apache Container Image (4.2)
+#
+# CHANGELOG
+#   * Fri Feb 01 2019 Eduardo Ramirez <eramirez@redhat.com>
+#   - Update to OCP4
+#   * Mon Jun 11 2018 Razique Mahroua <rmahroua@redhat.com>
+#   - Cleans the code
+#   * Fri Jun 08 2018 Artur Glogowski <aglogows@redhat.com>
+#   - Changed to version 3.9
+#   * Wed Mar 30 2017 Ricardo Jun <jtaniguc@redhat.com>
+#   - original code
+#   * Fri Mar 31 2017 Ricardo Jun <jtaniguc@redhat.com>
+#   - Implemented new checks
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+# Initialize and set some variables
+run_as_root='true'
+this='lab-image-operations'
+target='workstation'
+title='GE: Creating a Custom Apache Container Image'
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(start finish)
+
+# Additional functions for this grading script
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and grading of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_start {
+  print_header "Setting up ${target} for the ${title}"
+
+  check_podman_registry_config
+}
+
+function lab_finish {
+  print_header "Completing the ${title}"
+
+  for container in official-httpd test-httpd; do
+    pad " · Stopping $container container"
+    podman_stop_container $container
+
+    pad " · Removing $container container"
+    podman_rm_container $container
+  done
+
+  for image in redhattraining/httpd-parent quay.io/${RHT_OCP4_QUAY_USER}/do180-custom-httpd localhost/do180-custom-httpd; do
+    pad " · Removing $image image"
+    podman_rm_image $image
+  done
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

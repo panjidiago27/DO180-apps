@@ -1,0 +1,125 @@
+#!/bin/bash
+#
+# Copyright 2019 Red Hat, Inc.
+#
+# NAME
+#     lab-dockerfile-review - grading/setup script for DO180
+#
+# SYNOPSIS
+#     lab-dockerfile-review {setup|grade|finish}
+#
+#        start   - configures the environment at the start of a lab or exercise.
+#        grade   - checks that containers and images have been created successfully.
+#        finish  - executes any administrative tasks after completion of a lab or exercise.
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script is for lab 5.5 for building a custom apache image final lab.
+#
+# CHANGELOG
+#   * Mon Feb 11 2019 Eduardo Ramirez <eramirez@redhat.com>
+#   - Update to OCP 4
+#   * Mon Jun 11 2018 Artur Glogowski <aglogows@redhat.com>
+#   - Updated to version 3.9
+#   * Mon Apr 3 2017 Ravi Srinivasan <ravis@redhat.com>
+#   - Adapted for DO180
+#   * Tue Jan 14 2016 Zach Gutterman <zgutterm@redhat.com>
+#   - original code for DO276
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+# Initialize and set some variables
+run_as_root='true'
+this='dockerfile-review'
+target='workstation'
+title='Lab: Creating Custom Container Images'
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(start grade finish)
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and grading of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_start {
+  print_header "Setting up ${target} for the ${title}"
+
+  cd /home/student
+  check_podman_registry_config
+
+  pad " · Checking if the container exists or is running"
+
+  if [ -n podman_get_cid_by_name dockerfile ]; then
+	  print_FAIL
+	  print_line "The dockerfile container is running or it is in the cache. Remove it"
+  else
+	  print_SUCCESS
+  fi
+
+  grab_lab_files
+}
+
+function lab_grade {
+  print_header "Grading the student's work for ${title}"
+
+  pad " · Check for apache container image"
+  podman images | grep "custom-apache"
+  pass_if_equal $? 0
+
+  pad " · Check if the container is running"
+  podman ps -a | grep dockerfile
+  pass_if_equal $? 0
+
+  pad " · Verifying if httpd was installed correctly in apache image"
+  podman run --name lab-dockerfile-review-grader do180/custom-apache ls /usr/sbin | grep httpd
+  pass_if_equal $? 0
+
+  pad " · Verifying if hello world is running on server"
+  curl --silent 127.0.0.1:20080 | grep "The dockerfile-review lab works"
+  pass_if_equal $? 0
+
+  pad " · Stopping grade container"
+  podman_stop_container lab-dockerfile-review-grader
+
+  pad " · Removing grade container"
+  podman_rm_container lab-dockerfile-review-grader
+
+  print_line
+}
+
+
+function lab_finish {
+  print_header "Completing the ${title}"
+
+  pad " · Stopping running container"
+  podman_stop_container lab-dockerfile-review
+
+  pad " · Removing the container"
+  podman_rm_container lab-dockerfile-review
+
+  pad " · Removing do180/custom-apache container image"
+  podman_rm_image do180/custom-apache
+
+  pad " · Removing ubi7 container image"
+  podman_rm_image ubi7/ubi
+
+  print_line
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

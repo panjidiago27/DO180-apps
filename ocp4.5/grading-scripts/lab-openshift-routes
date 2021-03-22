@@ -1,0 +1,85 @@
+#!/usr/bin/bash
+#
+# Copyright 2019 Red Hat, Inc.
+#
+# NAME
+#     lab-openshift-routes - DO180 Exposing a Service as a Route
+#
+# SYNOPSIS
+#     lab-openshift-routes {start|finish}
+#
+#        start   - configures the environment at the start of a lab or exercise.
+#        finish  - executes any administrative tasks after completion of a lab or exercise.
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script configures the initial state of the lab with lab and solution files.
+#
+# CHANGELOG
+#   * Mon Feb 19 2019 Jordi Sola <jordisola@redhat.com>
+#   - Updated to OCP.4
+#   * Fri Jun 15 2018 Artur Glogowski <aglogows@redhat.com>
+#   - updated to version 3.9
+#   * Sun Apr 09 2017 Jim Rigsbee <jrigsbee@redhat.com>
+#   - original code
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin
+
+# Initialize and set some variables
+run_as_root='true'
+this='openshift-routes'
+target='workstation'
+title='Guided Exercise: Exposing a Service as a Route'
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(start finish)
+
+# Additional functions for this grading script
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and grading of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_start {
+  print_header "Setting up ${target} for the ${title}"
+
+  ocp4_is_cluster_up
+
+  pad " · Ensuring the '${RHT_OCP4_DEV_USER}-route' project does not exist"
+  delete_project "${RHT_OCP4_DEV_USER}-route"
+  success_if_equal $? 0
+}
+
+
+function lab_finish {
+  print_header "Completing the ${title}"
+
+  pad " · Removing OpenShift project '${RHT_OCP4_DEV_USER}-route'"
+  delete_project "${RHT_OCP4_DEV_USER}-route"
+  success_if_equal $? 0
+
+}
+
+function find_route_fqdn {
+  local stmt=$(oc describe route xyz | grep Host)
+  IFS=':' read -ra FQDN <<< "$stmt"
+  echo "${FQDN[1]}" | tr -d [:space:]
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

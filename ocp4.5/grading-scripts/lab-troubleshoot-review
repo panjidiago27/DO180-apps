@@ -1,0 +1,120 @@
+#!/usr/bin/bash
+#
+# Copyright 2019 Red Hat, Inc.
+#
+# NAME
+#     lab-troubleshoot-review - lab script for DO180 for Ch08 Lab.
+#
+# SYNOPSIS
+#     lab-troubleshoot-review {start|grade|finish}
+#
+#        start   - configures the environment at the start of a lab or exercise.
+#        grade   - checks that lab tasks are correctly executed.
+#        finish  - executes any administrative tasks after completion of a lab or exercise.
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script configures Ch08 Final Lab Troubleshooting Containerized Applications
+#
+# CHANGELOG
+#   * Wed Jun 12 2019 Michael Jarrett <mjarrett@redhat.com>
+#   - updated application route
+#   * Thu Feb 28 2018 Dan Kolepp <dkolepp@redhat.com>
+#   - changed lab name from lab-troubleshooting-lab to
+#     lab-troubleshoot-review, to match DocBook standards.
+#   - Updated verbs from setup/grade/cleanup, to start/grade/finish
+#   * Thu Jun 2018 Razique Mahroua <rmahroua@redhat.com>
+#   - updates and cleans the code
+#   * Thu Apr 20 2017 Ricardo Jun <jtaniguc@redhat.com>
+#   - original code
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+# Initialize and set some variables
+run_as_root='true'
+this='troubleshoot-review'
+target='workstation'
+title='Lab: Troubleshooting Containerized Applications'
+project_name=do180-apps
+
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(start grade finish)
+
+# Additional functions for this grading script
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and grading of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_start {
+  ocp4_print_prereq_header
+  ocp4_verify_local_clone_exist
+  ocp4_verify_prereq_git_projects 'nodejs-app'
+  ocp4_fail_if_project_exists "${RHT_OCP4_DEV_USER}-nodejs-app"
+  ocp4_fail_if_container_exists 'test'
+  ocp4_is_cluster_up
+
+  ocp4_print_setup_header
+  grab_lab_files
+  ocp4_print_setup_footer
+}
+
+function lab_grade {
+  print_header "Grading the student's work for the ${title}"
+
+  pad " · The nodejs-dev application response is correct"
+  local app_url="nodejs-dev-${RHT_OCP4_DEV_USER}-nodejs-app.${RHT_OCP4_WILDCARD_DOMAIN}"
+  curl -f $app_url
+  if [ $? -eq 0 ]; then
+    curl $app_url | grep "Hello World from pod: nodejs-dev"
+    if [ $? -eq 0 ]; then
+      print_PASS
+    else
+      print_FAIL
+      print_line "Hello World response not received;"
+      print_line "Instead, received the following response from $app_url: "
+      print_line "$(curl $app_url)"
+    fi
+  else
+    print_FAIL
+    print_line "Unable to access the application URL: $app_url"
+  fi
+
+  print_line
+}
+
+
+
+function lab_finish {
+  print_header "Completing the ${title}"
+
+  ocp4_login_as_developer
+  pad " · Deleting the '${RHT_OCP4_DEV_USER}-nodejs-app' OpenShift project"
+  if [ $? -eq 0 ]; then
+    delete_project "${RHT_OCP4_DEV_USER}-nodejs-app"
+    success_if_equal $? 0
+  else
+    print_FAIL
+    print_line "Unable to login to OpenShift."
+  fi
+
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

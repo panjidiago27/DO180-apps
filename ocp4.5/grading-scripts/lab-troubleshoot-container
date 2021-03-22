@@ -1,0 +1,86 @@
+#!/usr/bin/bash
+#
+# Copyright 2019 Red Hat, Inc.
+#
+# NAME
+#     lab-troubleshoot-container - grading/setup script for DO180
+#
+# SYNOPSIS
+#     lab-basic-apache {setup|grade|reset}
+#
+#        start   - configures the environment at the start of a lab or exercise.
+#        finish  - executes any administrative tasks after completion of a lab or exercise.
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script is for the GE 'Configuring Apache Container Logs for Debugging'
+#
+# CHANGELOG
+#   * Tue Mar 05 2019 Eduardo Ramirez <eramirez@redhat.com>
+#   - Update to OCP 4.0
+#
+#   * Wed Apr 11 2017 Ravi Srinivasan <ravis@redhat.com>
+#   - Updated for DO180
+#   - Removed solve verb
+#
+#   * Sun Jan 10 2016 Zach Gutterman <zgutterm@redhat.com>
+#   - original code from DO276
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin
+
+# Initialize and set some variables
+run_as_root='true'
+this='troubleshoot-container'
+target='workstation'
+title='Guided Excercise: Configuring Apache Container Logs for Debugging'
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(start finish)
+
+# Additional functions for this grading script
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and reset of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_start {
+  print_header "Setting up ${target} for the ${title}"
+
+  check_podman_registry_config
+
+  grab_lab_files
+}
+
+function lab_finish {
+  print_header "Completing the ${title}"
+
+  pad " · Stopping the troubleshoot-container container"
+  podman_stop_container troubleshoot-container
+
+  pad " · Removing the troubleshoot-container container"
+  podman_rm_container troubleshoot-container
+
+  pad " · Removing the troubleshoot-container container image"
+  podman_rm_image troubleshoot-container
+
+  pad " · Removing redhattraining/httpd-parent container image"
+  podman_rm_image httpd-parent
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

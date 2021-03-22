@@ -1,0 +1,85 @@
+#!/usr/bin/bash
+#
+# Copyright 2019 Red Hat, Inc.
+#
+# NAME
+#     lab-multicontainer-design - grading/setup script for DO180
+#
+# SYNOPSIS
+#     lab-example {start|finish}
+#
+#        start   - configures the environment at the start of a lab or exercise.
+#        finish  - executes any administrative tasks after completion of a lab or exercise.
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script configures GE: Linking the Web Application, and MySQL Containers
+#
+# CHANGELOG
+#   * Mon Dec 07 2020 Michael Phillips <miphilli@redhat.com>
+#   - Removing ubi7/ubi:7.7 instead of rhel7 conatiner image
+#   * Tue Oct 8 2019 Jordi Sola <jordisola@redhat.com>
+#   - Moved to external image repository
+#   * Thu Feb 21 2019 Jordi Sola <jordisola@redhat.com>
+#   - Moved to podman. Simplified.
+#   * Mon Mar 27 2017 Richard Allred <rallred@redhat.com>
+#   - Initial code.
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+# Initialize and set some variables
+run_as_root='true'
+this="multicontainer-design"
+title="Guided Exercise: Connecting Web Application and MySQL Container"
+target='workstation'
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(start finish)
+
+# Additional functions for this grading script
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and grading of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_start {
+  print_header "Setting up ${target} for the ${title}"
+
+  grab_lab_files
+  chown -R student:student /home/student/DO180/labs/${this}/
+  chown -R 27:27 /home/student/DO180/labs/${this}/deploy/nodejs/networked/work
+
+}
+
+
+function lab_finish {
+  print_header "Cleaning up the lab for ${title}"
+
+  for container in mysql todoapi ; do
+    pad " · Stopping $container container" && podman_stop_container $container
+    pad " · Removing $container container" && podman_rm_container $container
+  done
+
+  for image in do180/mysql-57-rhel7 do180/nodejs do180/todonodejs rhscl/mysql-57-rhel7 registry.access.redhat.com/ubi7/ubi:7.7; do
+    pad " · Removing $image image" && podman_rm_image $image
+  done
+
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

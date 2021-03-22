@@ -1,0 +1,88 @@
+#!/usr/bin/bash
+#
+# Copyright 2019 Red Hat, Inc.
+#
+# NAME
+#     lab-troubleshoot-s2i - grading/setup script for DO180
+#
+# SYNOPSIS
+#     lab-troubleshoot-s2i {start|finish}
+#
+#        start   - configures the environment at the start of a lab or exercise.
+#        finish  - executes any administrative tasks after completion of a lab or exercise.
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script is for the GE 'Troubleshooting an OpenShift Build'
+#
+# CHANGELOG
+#   * Wed Jun 12 2019 Michael Jarrett <mjarrett@redhat.com>
+#   - updated Initialize and set some variables
+#   * Tue Jun 19 2018 Razique Mahroua <rmahroua@redhat.com>
+#   - updates the script to work with the 3.9 course
+#   * Mon Apr 24 2017 Ricardo Jun <jtaniguc@redhat.com>
+#   - original code
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/sbin
+
+# Initialize and set some variables
+run_as_root='true'
+this='troubleshoot-s2i'
+target='workstation'
+title='Guided Exercise: Troubleshooting an OpenShift Build'
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(start finish)
+
+project_name=DO180-apps
+
+# Additional functions for this grading script
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and reset of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_start {
+
+  ocp4_print_prereq_header
+  ocp4_verify_local_clone_exist
+  ocp4_verify_prereq_git_projects 'nodejs-helloworld'
+  ocp4_fail_if_project_exists "${RHT_OCP4_DEV_USER}-nodejs"
+  ocp4_fail_if_container_exists 'test'
+  ocp4_is_cluster_up
+
+  ocp4_print_setup_header
+  grab_lab_files
+  ocp4_print_setup_footer
+
+}
+
+function lab_finish {
+  print_header "Completing the ${title}"
+
+  ocp4_login_as_developer
+  pad " · Deleting the '${RHT_OCP4_DEV_USER}-nodejs' OpenShift project"
+  if [ $? -eq 0 ]; then
+    delete_project "${RHT_OCP4_DEV_USER}-nodejs"
+    success_if_equal $? 0
+  fi
+
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

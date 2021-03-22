@@ -1,0 +1,130 @@
+#!/bin/bash
+#
+# Copyright 2017 Red Hat, Inc.
+#
+# NAME
+#     lab-linking-containers - grading/setup script for DO180
+#
+# SYNOPSIS
+#     lab-example {setup|grade|reset}
+#
+#        setup   - configures
+#        grade   - grades this lab
+#        reset   - remove
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script configures GE: Linking the Web Application, and MySQL Containers
+#
+# CHANGELOG
+#   * Mon Mar 27 2017 Richard Allred <rallred@redhat.com>
+#   - Initial code.
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+# Initialize and set some variables
+run_as_root='true'
+this="linking-containers"
+title="GE: Linking the Web Application, and MySQL Containers"
+target='workstation'
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(setup grade reset)
+
+# Additional functions for this grading script
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and grading of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_setup {
+  print_header "Setting up ${target} for ${title}"
+
+  check_docker_is_running
+  grab_lab_files
+}
+
+function lab_grade {
+  print_header "Grading the student's work for ${title}"
+
+  api_image=$(sudo docker images | grep "do180/nodejs" | wc -l)
+  todo_image=$(sudo docker images | grep "todonodejs" | wc -l)
+  running_mysql=$(sudo docker ps -a | grep "mysql" | wc -l)
+  running_api=$(sudo docker ps -a | grep "todoapi" | wc -l)
+
+  pad '• Check for running mysql container'
+  if [ $running_mysql -gt 0 ]
+  then
+    print_PASS
+  else
+    print_FAIL
+  fi
+
+  pad '• Check for running todo api'
+  if [ $running_api -gt 0 ]
+  then
+    print_PASS
+  else
+    print_FAIL
+  fi
+
+  pad '• Verifying rest API works running on server'
+  curl --silent 127.0.0.1:30080/todo/api/items/1 | grep "description" &> /dev/null
+  if [ $? -eq 0 ]; then
+    print_PASS
+  else
+    print_FAIL
+  fi
+}
+
+function lab_reset {
+  print_header "Cleaning up the lab for ${title}"
+
+  pad '• Stopping mysql container'
+  docker stop mysql 1>/dev/null 2>/dev/null
+  print_SUCCESS
+
+  pad '• Removing mysql container in the cache'
+  docker rm mysql 2>/dev/null 1>/dev/null
+  print_SUCCESS
+
+  pad '• Removing MySQL container image'
+  docker rmi -f do180/mysql-57-rhel7 &> /dev/null
+  print_SUCCESS
+
+  pad '• Stopping todoapi container'
+  docker stop todoapi 1>/dev/null 2>/dev/null
+  print_SUCCESS
+
+  pad '• Removing todoapi container in the cache'
+  docker rm todoapi 2>/dev/null 1>/dev/null
+  print_SUCCESS
+
+  pad '• Removing todoapi container image'
+  docker rmi -f do180/todonodejs &> /dev/null
+  print_SUCCESS
+
+  pad '• Removing mysql container image'
+  docker rmi -f do180/mysql-57-rhel7 &> /dev/null
+  print_SUCCESS
+
+  reset_lab
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

@@ -1,0 +1,84 @@
+#!/usr/bin/bash
+#
+# Copyright 2019 Red Hat, Inc.
+#
+# NAME
+#    lab-manage-lifecycle - setup script for DO180
+#
+# SYNOPSIS
+#     lab-manage-lifecycle {start|finish}
+#
+#        start   - configures the environment at the start of a lab or exercise.
+#        finish  - executes any administrative tasks after completion of a lab or exercise.
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script configures the Guided Exercise: Managing a MySQL Container
+#
+# CHANGELOG
+#   * Thu Jan 31 2019 Jordi Sola <jordisola@redhat.com>
+#   - Updated to use podman commands. Verbs refactoring.
+#   * Web Jun 2018 Artur Glogowski <aglogows@redhat.com>
+#   - changes related to version 3.9
+#   * Fri Mar 24 2017 Richard Allred <rallred@redhat.com>
+#   - original code
+
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+# Initialize and set some variables
+run_as_root='true'
+this="manage-lifecycle"
+title="Guided Excercise: Managing a MySQL Container"
+target='workstation'
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(start finish)
+
+# Additional functions for this grading script
+
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and grading of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_start {
+  print_header "Setting up ${target} for the ${title}"
+
+  #Remove once workstation is configured with
+  # registry.lab.example.com as a registry.
+  check_podman_registry_config
+
+  grab_lab_files
+}
+
+function lab_finish {
+  print_header "Completing the ${title}"
+
+  pad " · Stopping 'mysql' container" && podman_stop_container mysql
+  pad " · Stopping 'mysql-2' container" && podman_stop_container mysql-2
+
+  pad " · Removing 'mysql' container" && podman_rm_container mysql
+  pad " · Removing 'mysql-2' container" && podman_rm_container mysql-2
+  pad " · Removing 'mysql-db' container" && podman_rm_container mysql-db
+
+  pad " · Removing 'rhscl/mysql-57-rhel7' image" && podman_rm_image rhscl/mysql-57-rhel7
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

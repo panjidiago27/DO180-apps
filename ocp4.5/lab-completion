@@ -1,0 +1,39 @@
+_lab_module()
+{
+  # Keep the solve and reset verbs hidden for now (they are more comprehensive)
+  local cur prev CMDS='start grade finish'
+  # Get the comprehensive list of grading scripts from content
+  . /etc/rht
+# Course designers: either advertise all available helper scripts or
+# advertise a fixed subset of scripts of your choosing.
+  # Advertise all grading scripts that start with {lab|demo}- in the
+  # course grading-scripts directory:
+  local GRADING_URL="http://content.example.com/courses/${RHT_COURSE}/${RHT_VMTREE%/*}/grading-scripts/"
+  local PROBS=$( curl -s ${GRADING_URL} | sed -n "s/.*href=\"${1##*/}-\([^\"]*\)\".*/\1/p")
+  # Advertise a subset of grading scripts that start with {lab|demo}-
+  # in the course grading-scripts directory:
+# case ${1##*/} in
+#   lab)
+#     local PROBS='labprob1 labprob2 labprob3 ...'
+#     ;;
+#   demo)
+#     local PROBS='demo1 demo2 demo3 ...'
+#     ;;
+# esac
+
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+  case ${prev##*/} in
+    lab | demo)
+      COMPREPLY=( $(compgen -W "${PROBS}" -- $cur) )
+      return 0
+      ;;
+    *)
+      COMPREPLY=( $(compgen -W "${CMDS}" -- $cur) )
+      return 0
+      ;;
+  esac
+}
+complete -F _lab_module lab
+complete -F _lab_module demo

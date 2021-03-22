@@ -1,0 +1,169 @@
+#!/bin/bash
+#
+# Copyright 2019 Red Hat, Inc.
+#
+# NAME
+#     lab-manage-review - grading/setup script for DO180
+#
+# SYNOPSIS
+#     lab-manage-review {start|grade|finish}
+#
+#        start   - configures the environment at the start of a lab or exercise.
+#        grade   - grades this lab
+#        finish  - executes any administrative tasks after completion of a lab or exercise.
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script configures Lab: Managing Containers
+#
+# CHANGELOG
+#   * Tue Nov 10 2020 Michael Phillips <miphilli@redhat.com>
+#   - changed the order of print_FAIL in a grading step
+#   *  Wed Jan 30 2019 Eduardo Ramirez <eramirez@redhat.com>
+#   - Replaced docker with podman
+#   - Use new functions
+#   - Use new verbs
+#   *  Wed Jun 06 2018 Artur Glogowski <aglogows@redhat.com>
+#   - changes related to version 3.9
+#   - added cleanup function
+#   * Mon Mar 27 2017 Richard Allred <rallred@redhat.com>
+#   - Initial code.
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+# Initialize and set some variables
+run_as_root='true'
+this="manage-review"
+title="Lab: Managing Containers"
+target='workstation'
+user="student"
+do180_home="/home/${user}/DO180"
+labs="${do180_home}/labs"
+solutions="${do180_home}/solutions"
+
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(start grade finish)
+
+# Additional functions for this grading script
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and grading of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_start {
+  print_header "Setting up ${target} for the ${title}"
+
+  check_podman_registry_config
+
+  pad " · Check that /var/local/mysql does not exist"
+  if [ -d "/var/local/mysql" ]
+  then
+    print_FAIL
+    print_line "Please remove the directory: /var/local/mysql"
+  else
+    print_SUCCESS
+  fi
+
+  grab_lab_files
+}
+
+function lab_grade {
+  print_header "Grading the student's work for the ${title}"
+
+  pad " · Checking if the /var/local/mysql folder exists"
+  if [ -d "/var/local/mysql" ]; then
+        print_PASS
+  else
+        print_FAIL
+  fi
+
+  pad " · Checking if owner was changed"
+  if [ -d "/var/local/mysql" ]; then
+        USER=`ls -ld /var/local/mysql | awk '{ print $3 }'`
+        GROUP=`ls -ld /var/local/mysql | awk '{ print $4 }'`
+        if ( [ $USER == "mysql" ] || [ $USER == 27 ] ) && ( [ $GROUP == "mysql" ] || [ $GROUP == 27 ] ); then
+                print_PASS
+        else
+                print_FAIL
+        fi
+  else
+        print_FAIL
+  fi
+
+  pad " · Checking if the container mysql-1 was created"
+  container1=$(grep mysql-1 /tmp/my-containers | wc -l)
+  pass_if_equal "$container1" "1"
+
+  pad " · Checking if the mysql-2 container is running"
+  container2=$(sudo podman ps -a --format "{{ .Names }}" | grep "mysql-2" | wc -l)
+  pass_if_NOT_equal "$container2" "0"
+
+  pad " · Checking tables for the 'Finished lab' row"
+  rows=$(mysql -sN -uuser1 -h 127.0.0.1 -pmypa55 -P13306 items -e "SELECT *  FROM Item" | grep "Finished lab" | wc -l)
+  pass_if_equal "$rows" "1"
+
+}
+
+function lab_finish {
+  print_header "Completing the ${title}"
+
+  pad " · Removing the /var/local/mysql folder"
+  if remove_directory /var/local/mysql; then
+    print_SUCCESS
+  else
+    print_FAIL
+  fi
+
+  pad " · Removing the fcontext for /var/local/mysql"
+  if sudo semanage fcontext -C -l | grep "/var/local/mysql"; then
+    if sudo semanage fcontext -d -t container_file_t '/var/local/mysql(/.*)?'; then
+      print_SUCCESS
+    else
+      print_FAIL
+      print_line "Unable to remove fcontext for /var/local/mysql directory!"
+    fi
+  else
+    echo "File context for /var/local/mysql not found - no need to remove."
+    print_SUCCESS
+  fi
+
+  for container in mysql-1 mysql-2; do
+    pad " · Stopping $container container"
+    podman_stop_container $container
+
+    pad " · Removing $container container"
+    podman_rm_container $container
+  done
+
+  pad " · Removing MySQL container image"
+  podman_rm_image rhscl/mysql-57-rhel7
+
+  pad " · Removing temporary file"
+  if remove_directory /tmp/my-containers; then
+    print_SUCCESS
+  else
+    print_FAIL
+  fi
+
+}
+
+
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

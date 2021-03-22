@@ -1,0 +1,121 @@
+#!/usr/bin/bash
+#
+# Copyright 2017 Red Hat, Inc.
+#
+# NAME
+#     lab-container-review - grading/setup script for DO180
+#
+# SYNOPSIS
+#     lab-example {start|grade|finish}
+#
+#        start   - configures the environment at the start of a lab or exercise.
+#        grade   - checks that containers and images have been created successfully.
+#        finish  - executes any administrative tasks after completion of a lab or exercise.
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script configures the Lab: Creating Containerized Services
+#
+# CHANGELOG
+#   * Thu Jan 17 2019 Dan Kolepp <dkolepp@redhat.com>
+#   - Renamed script to conform with new standards.
+#   - New verbs are start, grade, finish,
+#      (no longer setup, grade, cleanup)
+#   * Fri Abr 06 2017 Fernando Lozano <flozano@redhat.com>
+#   - original code
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+# Initialize and set some variables
+run_as_root='true'
+this='container-review'
+target='workstation'
+title='Lab: Creating Containerized Services'
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(start grade finish)
+
+# Additional functions for this grading script
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and grading of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_start {
+  print_header "Setting up ${target} for the ${title}"
+
+  check_podman_registry_config
+
+  grab_lab_files "false"
+}
+
+function lab_grade {
+  print_header "Grading the student's work for the ${title}"
+
+  pad " · The httpd container image was pulled"
+  num_images=$(sudo podman images | grep "redhattraining/httpd-parent" | grep "2.4" | wc -l)
+  pass_if_NOT_equal "$num_images" "0"
+
+  pad " · The container was started with the correct name"
+  container_name=$(sudo podman ps -a --format "{{ .Names }}" | grep "httpd-basic" | wc -l)
+  pass_if_NOT_equal "$container_name" "0"
+
+  pad " · The container was started with the correct image"
+  container=$(sudo podman ps -a -f "name=httpd-basic" --format "{{ .Image }}" | grep "redhattraining/httpd-parent" | grep "2.4" | wc -l)
+  pass_if_NOT_equal "$container" "0"
+
+  pad " · Check the content of index.html"
+  page=$(curl -s http://localhost:8080/index.html | grep "Hello World" | wc -l)
+  pass_if_NOT_equal "$page" "0"
+
+  print_line
+}
+
+
+
+function lab_finish {
+  print_header "Completing the ${title}"
+
+  pad ' · Removing "httpd-basic" container'
+  result=$(sudo podman ps -q --filter name=httpd-basic)
+  if [ -z "$res" ]; then
+    print_SUCCESS
+  else
+    if sudo podman rm -f $result ; then
+      print_SUCCESS
+    else
+      print_FAIL
+    fi
+  fi
+
+  #Remove image from local cache?
+  pad ' · Removing "redhattraining/httpd-parent:2.4" image'
+  res=$(sudo podman images --format "{{.Repository}}:{{.Tag}} {{.ID}}" | grep "redhattraining/httpd-parent:2.4")
+  if [ -z "$res" ]; then
+    print_SUCCESS
+  else
+    if sudo podman rmi -f $(echo $res | awk '{print $2}') ; then
+      print_SUCCESS
+    else
+      print_FAIL
+    fi
+  fi
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

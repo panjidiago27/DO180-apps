@@ -1,0 +1,5 @@
+### rht-vm-hosts file listing the entries to be appended to /etc/hosts
+
+172.25.250.9    workstation.lab.example.com workstation
+172.25.254.254  classroom.example.com classroom
+172.25.250.254  bastion.lab.example.com bastion

@@ -1,0 +1,75 @@
+#!/usr/bin/bash
+#
+# Copyright 2017 Red Hat, Inc.
+#
+# NAME
+#    demo-manage-containers - grading/setup script for DO180
+#
+# SYNOPSIS
+#     demo-manage-containers {setup|grade|solve|reset}
+#
+#        setup   - no setup is needed for this lab
+#        grade   - checks if the  docker image was pulled and it is running
+#        solve   - executes the steps of the demo automatically
+#        reset   - destroys the containers
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script is used by the Demo: Managing Containers
+#
+# CHANGELOG
+#   * Wed Jun 13 2018 Artur Glogowski <aglogows@redhat.com>
+#   - Updated to version 3.9
+#   * Thu Mar 23 2017 Richard Allred <rallred@redhat.com>
+#   - Initial code
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+# Initialize and set some variables
+run_as_root='true'
+this="manage-containers"
+title="Demo: Managing Containers"
+target='workstation'
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(setup reset)
+
+# Additional functions for this grading script
+
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and grading of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_setup {
+  print_header "Setting up ${target} for ${title}"
+  check_docker_is_running
+}
+
+function lab_reset {
+  print_header "Cleaning up the lab for ${title}"
+  pad "Removing containers"
+  for id in $(sudo docker ps -aq); do sudo docker stop $id && sudo docker rm $id; done >> /dev/null
+  print_SUCCESS
+  pad "Removing images"
+  docker rmi -f rhscl/httpd-24-rhel7 2>/dev/null 1>/dev/null
+  print_SUCCESS
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

@@ -1,0 +1,126 @@
+#!/usr/bin/bash
+#
+# Copyright 2019 Red Hat, Inc.
+#
+# NAME
+#     lab-multicontainer-review - grading/setup script for DO180
+#
+# SYNOPSIS
+#     lab-example {setup|grade|reset}
+#
+#        start   - configures the environment at the start of a lab or exercise.
+#        grade   - checks that containers and images have been created successfully.
+#        finish  - executes any administrative tasks after completion of a lab or exercise.
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script configures Lab: Deploying Multi-container Applications
+#
+# CHANGELOG
+#   * Fri Feb 22 2019 Eduardo Ramirez <eramirez@redhat.com>
+#   - Update to OCP 4.0
+#   * Mon Apr 8 2017 Richard Allred <rallred@redhat.com>
+#   - Initial code.
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+# Initialize and set some variables
+run_as_root='true'
+this="multicontainer-review"
+title="Lab: Deploying Multi-container Applications"
+target='workstation'
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(start grade finish)
+
+# Additional functions for this grading script
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and grading of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_start {
+  print_header "Setting up ${target} for the ${title}"
+
+  grab_lab_files true
+
+  ocp4_is_cluster_up
+
+}
+
+function lab_grade {
+  print_header "Grading the student's work for ${title}"
+
+  pad '• Accessing Quotes web application'
+  local fqdn=quote-php-${RHT_OCP4_DEV_USER}-deploy.${RHT_OCP4_WILDCARD_DOMAIN}
+  echo "App route FQDN is ${fqdn}"
+
+  curl -f -s --connect-timeout 1 "http://${fqdn}"
+  if [ $? == "0" ]; then
+    print_PASS
+  else
+    print_FAIL
+    print_line "   --> Could not access route at: $fqdn"
+  fi
+
+  print_line
+}
+
+function find_router_port {
+  local stmt=$(${oc} set env dc/router -n default --list | grep HTTP_PORT)
+  IFS='=' read -ra ROUTER <<< "$stmt"
+  echo "${ROUTER[1]}"
+}
+
+function find_route_fqdn {
+  #oc login -u developer &>/dev/null
+  #oc project deploy &>/dev/null
+  local stmt=$(${oc} describe route quote-php | grep Host)
+  IFS=':' read -ra FQDN <<< "$stmt"
+  echo "${FQDN[1]}" | tr -d [:space:]
+}
+
+function lab_finish {
+  print_header "Completing the ${title}"
+
+  ocp4_login_as_developer
+
+  pad " · Deleting the ${RHT_OCP4_DEV_USER}-deploy project"
+  if [ $? -eq 0 ]; then
+    delete_project ${RHT_OCP4_DEV_USER}-deploy
+    success_if_equal $? 0
+  else
+    print_FAIL
+  fi
+
+  print_line " · Remove local images"
+  for image in localhost/do180-mysql-57-rhel7 \
+               localhost/do180-quote-php \
+               quay.io/${RHT_OCP4_QUAY_USER}/do180-mysql-57-rhel7 \
+               quay.io/${RHT_OCP4_QUAY_USER}/do180-todonodejs \
+               registry.access.redhat.com/rhscl/mysql-57-rhel7 ; do
+
+    pad " · Removing $image image" && podman_rm_image $image  
+  done
+  
+  pad " · Removing registry.access.redhat.com/ubi8/ubi image"
+  remove_dependant_images registry.access.redhat.com/ubi8/ubi
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

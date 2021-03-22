@@ -1,0 +1,95 @@
+#!/usr/bin/bash
+#
+# Copyright 2017 Red Hat, Inc.
+#
+# NAME
+#     lab-mysql-openshift - grading/setup script for DO180
+#
+# SYNOPSIS
+#     lab-mysql-openshift {start|finish}
+#
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script is for the GE 'Deploying a Database Server on OpenShift'
+#
+# CHANGELOG
+#   * Fri Feb 15 2019 Michael Jarrett <mjarrett@redhat.com>
+#   - Updated to version 4.0
+#   * Mon Jun 11 2018 Artur Glogowski <aglogows@redhat.com>
+#   - Updated to version 3.9
+#   * Fri Apr 7 2017 Ravi Srinivasan <ravis@redhat.com>
+#   - Updated for DO180
+#   - Removed solve verb
+#
+#   * Sun Jan 10 2016 Zach Gutterman <zgutterm@redhat.com>
+#   - original code from DO276
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+# Initialize and set some variables
+run_as_root='false'
+this='mysql-openshift'
+target='workstation'
+title='Guided Exercise: Deploying a Database Server on OpenShift'
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(start finish)
+
+# Additional functions for this grading script
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^lab-//')
+  cat << EOF
+This script controls the setup and reset of this lab.
+Usage: lab ${problem_name} COMMAND
+       lab ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_start {
+  print_header "Setting up ${target} for the ${title}"
+ocp_admin_login_on_master
+
+}
+
+function ocp_admin_login_on_master {
+  pad " · Verifying the cluster is operational"
+
+password=$(curl http://materials.example.com/kubeadmin)
+  if sudo ssh core@master0 oc login -u kubeadmin -p ${password} https://cluster-api.lab.example.com:6443 --insecure-skip-tls-verify=true; then
+print_SUCCESS
+    else
+      print_FAIL
+  fi
+}
+
+
+
+function lab_finish {
+  print_header "Cleaning up the lab for ${title}"
+  password=$(curl http://materials.example.com/kubeadmin)
+  pad "Deleting the mysql-openshift project"
+if sudo ssh core@master0 oc login -u kubeadmin -p ${password} https://cluster-api.lab.example.com:6443 --insecure-skip-tls-verify=true; then
+sudo ssh core@master0 oc delete project mysql-openshift
+      print_SUCCESS
+    else
+      print_FAIL
+  fi
+
+#  oc login -u kubeadmin -p ${password} https://cluster-api.lab.example.com:6443 --insecure-skip-tls-verify=true
+ # oc delete project mysql-openshift
+ # print_SUCCESS
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"

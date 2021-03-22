@@ -1,0 +1,80 @@
+#!/usr/bin/bash
+#
+# Copyright 2017 Red Hat, Inc.
+#
+# NAME
+#     demo-simple-container - grading/setup script for DO180
+#
+# SYNOPSIS
+#     demo-simple-container {setup|reset}
+#
+#        setup   - configures 
+#        reset   - remove 
+#
+#     All functions only work on workstation
+#
+# DESCRIPTION
+#     This script configures setup and reset for 'Building a Simple Container' demo.
+#
+# CHANGELOG
+#   * Tue Jun 12 2018 Artur Glogowski <aglogows@redhat.com>
+#   - fixed for version 3.9
+#   * Fri Mar 31 2017 Ravi Srinivasan <rsriniva@redhat.com>
+#   - original code
+
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+# Initialize and set some variables
+run_as_root='true'
+this='simple-container'
+target='workstation'
+title='Building a Simple Container'
+
+# This defines which subcommands are supported (solve, reset, etc.).
+# Corresponding lab_COMMAND functions must be defined.
+declare -a valid_commands=(setup reset)
+
+# Additional functions for this grading script
+
+function print_usage {
+  local problem_name=$(basename $0 | sed -e 's/^demo-//')
+  cat << EOF
+This script controls the setup and reset of this demo.
+Usage: demo ${problem_name} COMMAND
+       demo ${problem_name} -h|--help
+
+COMMAND is one of: ${valid_commands[@]}
+
+EOF
+}
+
+function lab_setup {
+  print_header "Setting up ${target} for ${title}"
+  grab_lab_files
+  check_docker_is_running
+}
+
+function lab_reset {
+  print_header "Cleaning up the lab for ${title}"
+  pad "Stopping simple-container container that is running"
+  docker stop simple-container 1>/dev/null 2>/dev/null
+  print_SUCCESS
+
+  pad "Removing simple-container container that is in the cache"
+  docker rm simple-container 1>/dev/null 2>/dev/null
+  print_SUCCESS
+
+  pad "Removing do180/rhel custom container image"
+  docker rmi -f do180/rhel 2>/dev/null 1>/dev/null
+  print_SUCCESS
+
+  reset_lab
+}
+
+############### Don't EVER change anything below this line ###############
+
+# Source library of functions
+source /usr/local/lib/labtool.shlib
+source /usr/local/lib/labtool.do180.shlib
+
+grading_main_program "$@"
